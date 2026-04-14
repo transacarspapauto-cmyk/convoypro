@@ -1,4 +1,4 @@
-mport { useAuth } from "./hooks/useAuth";
+import { useAuth } from "./hooks/useAuth";
 import Login from "./pages/Login";
 import AppLegacy from "./AppLegacy.jsx";
 
