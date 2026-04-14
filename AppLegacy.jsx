@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { supabase } from "./lib/supabase";
 
 /* ═══════════════════════════════════════════════════
    SAFE. V2 — Identité visuelle officielle
@@ -1087,7 +1088,7 @@ function DesktopApp({ user, showPrice = false }) {
 
 /* ═══════ ROOT ═══════ */
 const DEMO_USER = { name:"Marckatty Regulat" };
-export default function AppLegacy() {
+export default function AppLegacy({ session }) {
   const platform = usePlatform();
   const [user]       = useState(DEMO_USER);
   const [forceView, setForceView] = useState(null);
@@ -1142,6 +1143,16 @@ export default function AppLegacy() {
               {b.l}
             </button>
           ))}
+
+          {/* Déconnexion */}
+          {session && (
+            <button
+              onClick={() => supabase.auth.signOut()}
+              title="Se déconnecter"
+              style={{ background: "transparent", color: C.textMuted, border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 10px", fontFamily: fb, fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all .15s", display: "flex", alignItems: "center", gap: 4 }}>
+              ⎋ Sortir
+            </button>
+          )}
         </div>
       </div>
 
