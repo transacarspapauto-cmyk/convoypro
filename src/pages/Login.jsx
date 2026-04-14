@@ -17,7 +17,7 @@ export default function Login() {
 
   return (
     <div style={{ minHeight:"100vh", background:"#0D1117", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Barlow',sans-serif" }}>
-      <style>{@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700;800&display=swap');}</style>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700;800&display=swap"/>
       <div style={{ width:380, background:"#1E2636", border:"1px solid #2A3348", borderRadius:14, padding:36 }}>
         
         {/* Logo */}
