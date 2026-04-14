@@ -1,30 +1,15 @@
-import { useState, useEffect } from "react";
-import { supabase } from "./lib/supabase";
-import AuthScreen from "./components/AuthScreen";
+import { useAuth } from "./hooks/useAuth";
+import Login from "./pages/Login";
 import AppLegacy from "./AppLegacy.jsx";
 
 export default function App() {
-  const [session, setSession] = useState(undefined); // undefined = chargement
+  const { session, loading } = useAuth();
 
-  useEffect(() => {
-    // Session initiale
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
+  // Chargement initial — on n'affiche rien pour éviter un flash
+  if (loading) return null;
 
-    // Écoute les changements (login / logout)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  // Chargement initial
-  if (session === undefined) return null;
-
-  // Non connecté → écran de login
-  if (!session) return <AuthScreen />;
+  // Non connecté → page de login
+  if (!session) return <Login />;
 
   // Connecté → app principale
   return <AppLegacy session={session} />;
