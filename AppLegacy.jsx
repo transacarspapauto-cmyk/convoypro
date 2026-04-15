@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { supabase } from "./lib/supabase";
 import { useMissions } from "./hooks/useMissions";
 import { useEDL, initEDLData } from "./hooks/useEDL";
+import { uploadPhoto, deletePhoto } from "./hooks/usePhotoUpload";
 
 /* ═══════════════════════════════════════════════════
    SAFE. V2 — Identité visuelle officielle
@@ -250,39 +251,110 @@ const isUnlocked = (s,d) => { for(let i=1;i<s;i++) if(!isDone(i,d)) return false
 const STEP_LABELS = ["","Résumé","Navigation enlèvement","Checklist enlèvement","Photos enlèvement","Navigation livraison","Photos livraison","Checklist livraison","Signature","Procès verbal"];
 
 /* ─── Photo Manager ─── */
-const gradients = [["#1e2024","#2a2d35"],["#1a1c20","#242830"],["#16181c","#1e2228"],["#1c1e22","#282c32"],["#181a1e","#202428"]];
-function PhotoManager({ photos, onChange }) {
-  function add()   { onChange([...photos, { id:Date.now(), g:gradients[photos.length%5] }]); }
-  function remove(id) { onChange(photos.filter(p=>p.id!==id)); }
+function PhotoManager({ photos, onChange, userId, missionId }) {
+  const inputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState(null);
+
+  async function handleFiles(e) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setUploading(true);
+    setUploadErr(null);
+
+    const added = [];
+    for (const file of files) {
+      try {
+        if (userId && missionId) {
+          const photo = await uploadPhoto(file, userId, missionId);
+          added.push(photo);
+        } else {
+          // Aperçu local si pas de connexion Supabase
+          const url = URL.createObjectURL(file);
+          added.push({ id: String(Date.now() + Math.random()), url, path: null });
+        }
+      } catch (err) {
+        setUploadErr("Erreur upload : " + err.message);
+      }
+    }
+
+    onChange([...photos, ...added]);
+    setUploading(false);
+    // Reset input pour permettre de re-sélectionner le même fichier
+    e.target.value = "";
+  }
+
+  async function remove(photo) {
+    onChange(photos.filter(p => p.id !== photo.id));
+    if (photo.path) deletePhoto(photo.path); // fire-and-forget
+  }
+
+  function triggerInput() { inputRef.current?.click(); }
+
+  const ok = photos.length >= 4;
+
   return (
     <div>
+      {/* Input caméra caché */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        multiple
+        onChange={handleFiles}
+        style={{ display: "none" }}
+      />
+
+      {/* En-tête compteur + bouton */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-        <div style={{ fontSize:13, color: photos.length>=4 ? C.green : C.textSecondary }}>
-          {photos.length>=4
+        <div style={{ fontSize:13, color: ok ? C.green : C.textSecondary }}>
+          {ok
             ? <span style={{ fontWeight:600 }}>✓ {photos.length} photos — OK</span>
             : <span>Minimum 4 requises <span style={{ color:C.accent }}>({photos.length}/4)</span></span>}
         </div>
-        <BtnPrimary onClick={add} style={{ padding:"7px 14px", fontSize:12 }}>+ Ajouter</BtnPrimary>
+        <button
+          onClick={triggerInput}
+          disabled={uploading}
+          style={{ background: uploading ? C.bgHover : C.accent, color: uploading ? C.textMuted : "#fff", border:"none", borderRadius:7, padding:"7px 14px", fontSize:12, fontWeight:700, fontFamily:fb, cursor: uploading ? "not-allowed" : "pointer", display:"flex", alignItems:"center", gap:5 }}>
+          {uploading ? "⏳" : "📷"} {uploading ? "Upload…" : "Ajouter"}
+        </button>
       </div>
+
+      {/* Erreur upload */}
+      {uploadErr && (
+        <div style={{ fontSize:12, color:"#E85555", background:"rgba(232,85,85,0.1)", border:"1px solid rgba(232,85,85,0.3)", borderRadius:6, padding:"8px 12px", marginBottom:10 }}>
+          {uploadErr}
+        </div>
+      )}
+
+      {/* Grille photos */}
       {photos.length > 0 ? (
         <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
           {photos.map(p => (
-            <div key={p.id} style={{ aspectRatio:"4/3", borderRadius:8, background:`linear-gradient(135deg,${p.g[0]},${p.g[1]})`, border:`1px solid ${C.borderMid}`, position:"relative", display:"flex", alignItems:"center", justifyContent:"center" }} className="pop">
-              <span style={{ fontSize:22, opacity:.6 }}>📷</span>
-              <button onClick={()=>remove(p.id)} style={{ position:"absolute", top:4, right:4, width:18, height:18, borderRadius:9, background:"rgba(0,0,0,0.6)", border:`1px solid ${C.border}`, color:C.textSecondary, fontSize:11, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>×</button>
+            <div key={p.id} className="pop" style={{ aspectRatio:"4/3", borderRadius:8, border:`1px solid ${C.borderMid}`, position:"relative", overflow:"hidden", background:C.bgHover }}>
+              {p.url
+                ? <img src={p.url} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+                : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, opacity:.5 }}>📷</div>}
+              <button
+                onClick={() => remove(p)}
+                style={{ position:"absolute", top:4, right:4, width:20, height:20, borderRadius:10, background:"rgba(0,0,0,0.65)", border:"none", color:"#fff", fontSize:12, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>
+                ×
+              </button>
             </div>
           ))}
-          {Array.from({length:Math.max(0,4-photos.length)}).map((_,i) => (
-            <div key={i} onClick={add} style={{ aspectRatio:"4/3", borderRadius:8, border:`1px dashed ${C.borderMid}`, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:4, cursor:"pointer", transition:"border-color .15s" }}>
+          {Array.from({length: Math.max(0, 4 - photos.length)}).map((_, i) => (
+            <div key={i} onClick={triggerInput} style={{ aspectRatio:"4/3", borderRadius:8, border:`1px dashed ${C.borderMid}`, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:4, cursor:"pointer" }}>
               <span style={{ fontSize:20, opacity:.4 }}>📷</span>
               <span style={{ fontSize:11, color:C.textMuted }}>Ajouter</span>
             </div>
           ))}
         </div>
       ) : (
-        <div style={{ border:`1px dashed ${C.border}`, borderRadius:8, padding:"28px 16px", textAlign:"center" }}>
-          <div style={{ fontSize:32, marginBottom:8, opacity:.5 }}>📷</div>
-          <div style={{ fontSize:13, color:C.textMuted }}>Aucune photo — 4 minimum obligatoires</div>
+        <div onClick={triggerInput} style={{ border:`1px dashed ${C.border}`, borderRadius:8, padding:"32px 16px", textAlign:"center", cursor:"pointer" }}>
+          <div style={{ fontSize:36, marginBottom:8, opacity:.5 }}>📷</div>
+          <div style={{ fontSize:13, color:C.textMuted, marginBottom:4 }}>Toucher pour ouvrir l'appareil photo</div>
+          <div style={{ fontSize:11, color:C.textMuted, opacity:.6 }}>4 minimum obligatoires · JPEG · max 1200px</div>
         </div>
       )}
     </div>
@@ -567,7 +639,7 @@ function Step3({d,od}){
   );
 }
 
-function Step4({d,od}){return(<div className="fade"><Card><SectionTitle>Photos à l'enlèvement</SectionTitle><div style={{fontSize:12,color:C.textMuted,marginBottom:12}}>Avant · Arrière · Côté droit · Côté gauche · + tout défaut visible</div><PhotoManager photos={d.pEnl} onChange={p=>od({...d,pEnl:p})}/></Card></div>);}
+function Step4({d,od,m,userId}){return(<div className="fade"><Card><SectionTitle>Photos à l'enlèvement</SectionTitle><div style={{fontSize:12,color:C.textMuted,marginBottom:12}}>Avant · Arrière · Côté droit · Côté gauche · + tout défaut visible</div><PhotoManager photos={d.pEnl} onChange={p=>od({...d,pEnl:p})} userId={userId} missionId={m?.id}/></Card></div>);}
 
 function Step5({d,od,m}){
   return (
@@ -601,7 +673,7 @@ function Step5({d,od,m}){
   );
 }
 
-function Step6({d,od}){return(<div className="fade"><Card><SectionTitle>Photos à la livraison</SectionTitle><div style={{fontSize:12,color:C.textMuted,marginBottom:12}}>Avant · Arrière · Tableau de bord · Jauge carburant</div><PhotoManager photos={d.pLiv} onChange={p=>od({...d,pLiv:p})}/></Card></div>);}
+function Step6({d,od,m,userId}){return(<div className="fade"><Card><SectionTitle>Photos à la livraison</SectionTitle><div style={{fontSize:12,color:C.textMuted,marginBottom:12}}>Avant · Arrière · Tableau de bord · Jauge carburant</div><PhotoManager photos={d.pLiv} onChange={p=>od({...d,pLiv:p})} userId={userId} missionId={m?.id}/></Card></div>);}
 
 function Step7({d,od}){
   const l=d.liv; function sl(f,v){od({...d,liv:{...l,[f]:v}});}
@@ -776,7 +848,7 @@ function MobileApp({ showPrice = false, missions = [], userId }) {
               {errors.length>1 && <ul style={{ paddingLeft:16 }}>{errors.map((e,i)=><li key={i} style={{ fontSize:12, color:C.accent, marginTop:3 }}>{e}</li>)}</ul>}
             </div>
           )}
-          <SC d={data} od={setData} m={selM} onFin={()=>setFinished(true)}/>
+          <SC d={data} od={setData} m={selM} userId={userId} onFin={()=>setFinished(true)}/>
         </div>
 
         {/* CTA */}
