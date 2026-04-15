@@ -5,6 +5,7 @@ import { useMissions } from "./hooks/useMissions";
 import { useEDL, initEDLData } from "./hooks/useEDL";
 import { uploadPhoto, deletePhoto } from "./hooks/usePhotoUpload";
 import { sendPV } from "./lib/sendEmail";
+import { generateClientToken } from "./hooks/useClientToken";
 
 // Chargement différé — @react-pdf/renderer est lourd (~1.5 MB)
 async function generatePDFBlob(mission, edl, date) {
@@ -791,6 +792,47 @@ function Step9({d,m,onFin}){
   );
 }
 
+/* ─── Lien client sécurisé ─── */
+function ClientLinkButton({ mission, edl, userId }) {
+  const [url, setUrl]         = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [copied, setCopied]   = useState(false);
+  const [err, setErr]         = useState(null);
+
+  async function generate() {
+    setLoading(true); setErr(null); setUrl(null);
+    try {
+      const link = await generateClientToken(mission, edl, userId);
+      setUrl(link);
+    } catch(e) { setErr("Erreur : "+e.message); }
+    setLoading(false);
+  }
+
+  function copy() {
+    navigator.clipboard.writeText(url).then(()=>{ setCopied(true); setTimeout(()=>setCopied(false),2000); });
+  }
+
+  return (
+    <div>
+      {!url ? (
+        <button onClick={generate} disabled={loading}
+          style={{ width:"100%", background:"transparent", border:`1px solid ${C.border}`, borderRadius:9, padding:"12px 14px", fontSize:13, fontFamily:fb, fontWeight:600, color: loading ? C.textMuted : C.textSecondary, cursor: loading ? "not-allowed" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"all .15s" }}>
+          {loading ? "⏳ Génération…" : "🔗 Générer lien client"}
+        </button>
+      ) : (
+        <div style={{ background:C.bgCard, border:`1px solid ${C.accentBorder}`, borderRadius:9, padding:"12px 14px" }}>
+          <div style={{ fontSize:11, color:C.accent, fontWeight:600, marginBottom:6 }}>🔗 Lien client — valable 30 jours</div>
+          <div style={{ fontSize:11, color:C.textMuted, wordBreak:"break-all", marginBottom:10, fontFamily:"monospace" }}>{url}</div>
+          <button onClick={copy} style={{ width:"100%", background: copied ? C.greenBg : C.accentMist, border:`1px solid ${copied ? C.greenBorder : C.accentBorder}`, borderRadius:7, padding:"9px", fontSize:13, fontFamily:fb, fontWeight:700, color: copied ? C.green : C.accent, cursor:"pointer", transition:"all .15s" }}>
+            {copied ? "✓ Copié !" : "Copier le lien"}
+          </button>
+        </div>
+      )}
+      {err && <div style={{ fontSize:11, color:"#E85555", marginTop:6 }}>{err}</div>}
+    </div>
+  );
+}
+
 /* ═══════ MOBILE APP ═══════ */
 function MobileApp({ showPrice = false, missions = [], userId }) {
   const [tab,setTab]=useState("missions");
@@ -943,9 +985,10 @@ function MobileApp({ showPrice = false, missions = [], userId }) {
             </div>
           ))}
         </Card>
-        <BtnPrimary onClick={()=>setInEDL(true)} style={{ width:"100%", padding:"14px", fontSize:15 }}>
+        <BtnPrimary onClick={()=>setInEDL(true)} style={{ width:"100%", padding:"14px", fontSize:15, marginBottom:10 }}>
           Démarrer l'état des lieux →
         </BtnPrimary>
+        <ClientLinkButton mission={selM} edl={data} userId={userId}/>
       </div>
     </div>
   );
