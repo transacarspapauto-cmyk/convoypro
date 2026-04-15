@@ -4,6 +4,16 @@ import { supabase } from "./lib/supabase";
 import { useMissions } from "./hooks/useMissions";
 import { useEDL, initEDLData } from "./hooks/useEDL";
 import { uploadPhoto, deletePhoto } from "./hooks/usePhotoUpload";
+import { sendPV } from "./lib/sendEmail";
+
+// Chargement différé — @react-pdf/renderer est lourd (~1.5 MB)
+async function generatePDFBlob(mission, edl, date) {
+  const [{ pdf }, { PVDocument }] = await Promise.all([
+    import("@react-pdf/renderer"),
+    import("./lib/PVDocument"),
+  ]);
+  return pdf(<PVDocument mission={mission} edl={edl} date={date} />).toBlob();
+}
 
 /* ═══════════════════════════════════════════════════
    SAFE. V2 — Identité visuelle officielle
@@ -454,7 +464,7 @@ function SignatureCanvas({ onSigned }) {
     const p=pos(e);const ctx=ref.current.getContext("2d");
     ctx.strokeStyle="#fff";ctx.lineWidth=2.2;ctx.lineCap="round";ctx.lineJoin="round";
     ctx.beginPath();ctx.moveTo(...last.current);ctx.lineTo(...p);ctx.stroke();
-    last.current=p;setHas(true);onSigned(true);
+    last.current=p;setHas(true);onSigned(ref.current.toDataURL("image/png"));
   }
   function end(){drawing.current=false;}
   function clear(){ref.current.getContext("2d").clearRect(0,0,600,180);setHas(false);onSigned(false);}
@@ -794,6 +804,35 @@ function MobileApp({ showPrice = false, missions = [], userId }) {
   const scrollRef=useRef(null);
 
   // Success screen
+  const [pdfLoading,setPdfLoading]=useState(false);
+  const [emailLoading,setEmailLoading]=useState(false);
+  const [emailSent,setEmailSent]=useState(false);
+  const [actionErr,setActionErr]=useState(null);
+
+  async function handleDownloadPDF(){
+    setPdfLoading(true); setActionErr(null);
+    try {
+      const date=new Date().toLocaleDateString("fr-FR");
+      const blob=await generatePDFBlob(selM,data,date);
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url; a.download=`PV_${selM?.ref}_${date.replace(/\//g,"-")}.pdf`;
+      a.click(); URL.revokeObjectURL(url);
+    } catch(e){ setActionErr("Erreur PDF : "+e.message); }
+    setPdfLoading(false);
+  }
+
+  async function handleSendEmail(){
+    setEmailLoading(true); setActionErr(null);
+    try {
+      const date=new Date().toLocaleDateString("fr-FR");
+      const blob=await generatePDFBlob(selM,data,date);
+      await sendPV({ to:selM?.email, missionRef:selM?.ref, missionTitre:selM?.titre, date, pdfBlob:blob });
+      setEmailSent(true);
+    } catch(e){ setActionErr("Erreur envoi : "+e.message); }
+    setEmailLoading(false);
+  }
+
   if(finished) return(
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:32, textAlign:"center", position:"relative", overflow:"hidden" }}>
       {/* Watermark carrés safe. */}
@@ -803,15 +842,32 @@ function MobileApp({ showPrice = false, missions = [], userId }) {
       <div style={{ marginBottom:24 }}><SafeLogo size={1.2}/></div>
       <div style={{ width:64, height:64, borderRadius:12, background:C.greenBg, border:`2px solid ${C.greenBorder}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:28, marginBottom:20 }}>✓</div>
       <div style={{ fontFamily:"'Barlow',sans-serif", fontWeight:800, fontSize:26, color:C.textPrimary, marginBottom:4 }}>Mission terminée</div>
-      <div style={{ fontSize:13, color:C.textSecondary, marginBottom:6 }}>Procès verbal généré</div>
-      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:32, color:C.textMuted, fontSize:12 }}>
+      <div style={{ fontSize:13, color:C.textSecondary, marginBottom:6 }}>Procès verbal prêt</div>
+      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:28, color:C.textMuted, fontSize:12 }}>
         <span style={{ display:"inline-block", width:4, height:4, background:C.accent, borderRadius:1 }}/>
         {new Date().toLocaleDateString("fr-FR")}
         <span style={{ display:"inline-block", width:4, height:4, background:C.accent, borderRadius:1 }}/>
       </div>
-      <div style={{ display:"flex", gap:10 }}>
-        <BtnGhost>📤 Envoyer</BtnGhost>
-        <BtnPrimary onClick={()=>{setFinished(false);setInEDL(false);setStep(1);setData(initEDLData);setSelM(null);}}>← Retour</BtnPrimary>
+      {actionErr && (
+        <div style={{ background:"rgba(232,85,85,0.10)", border:"1px solid rgba(232,85,85,0.3)", borderRadius:8, padding:"10px 16px", fontSize:12, color:"#E85555", marginBottom:16, maxWidth:320 }}>
+          {actionErr}
+        </div>
+      )}
+      {emailSent && (
+        <div style={{ background:C.greenBg, border:`1px solid ${C.greenBorder}`, borderRadius:8, padding:"10px 16px", fontSize:12, color:C.green, marginBottom:16, fontWeight:600 }}>
+          ✓ Email envoyé à {selM?.email}
+        </div>
+      )}
+      <div style={{ display:"flex", flexDirection:"column", gap:10, width:"100%", maxWidth:280 }}>
+        <BtnPrimary onClick={handleDownloadPDF} disabled={pdfLoading} style={{ width:"100%", padding:"13px" }}>
+          {pdfLoading ? "⏳ Génération…" : "⬇ Télécharger le PDF"}
+        </BtnPrimary>
+        <BtnGhost onClick={handleSendEmail} disabled={emailLoading||emailSent} style={{ width:"100%" }}>
+          {emailLoading ? "⏳ Envoi…" : emailSent ? "✓ Envoyé" : "📤 Envoyer par email"}
+        </BtnGhost>
+        <BtnGhost onClick={()=>{setFinished(false);setInEDL(false);setStep(1);setData(initEDLData);setSelM(null);setEmailSent(false);setActionErr(null);}}>
+          ← Retour aux missions
+        </BtnGhost>
       </div>
     </div>
   );
