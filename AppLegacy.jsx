@@ -1263,16 +1263,21 @@ function NewMissionModal({ userId, onClose, onSaved }) {
     if (!userId) { setErr("Session expirée — rechargez la page."); return; }
     setSaving(true);
     const ref = "MISS" + Date.now().toString().slice(-6);
-    const { error } = await supabase.from("missions").insert({
+    const payload = {
       ...form,
       ref,
       vehicule: `${form.marque} ${form.modele}`.trim(),
       user_id: userId,
       kmEnl: "—", kmLiv: "—",
-    });
+    };
+    const { error } = await supabase.from("missions").insert(payload);
     setSaving(false);
-    if (error) { setErr(error.message); }
-    else { onSaved(); }
+    if (error) {
+      // Affiche le détail complet pour faciliter le debug
+      setErr(`Erreur : ${error.message} (code ${error.code ?? "?"})`);
+    } else {
+      onSaved();
+    }
   }
 
   const inp = (k, placeholder, opts={}) => (
