@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 
 /*
@@ -83,7 +83,7 @@ export async function generateClientToken(mission, edl, userId) {
 export function useClientData(token) {
   const [state, setState] = useState({ mission: null, edl: null, expiresAt: null, loading: true, error: null });
 
-  useState(() => {
+  useEffect(() => {
     if (!token) { setState(s => ({ ...s, loading: false, error: "Token manquant" })); return; }
 
     supabase

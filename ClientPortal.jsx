@@ -125,7 +125,7 @@ export default function ClientPortal({ token }) {
         import("@react-pdf/renderer"),
         import("../lib/PVDocument"),
       ]);
-      const blob = await pdf(<PVDocument mission={m} edl={d || {}} date={date} />).toBlob();
+      const blob = await pdf(<PVDocument mission={m} edl={d || {}} date={date} userName="" />).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = `PV_${m.ref}.pdf`;

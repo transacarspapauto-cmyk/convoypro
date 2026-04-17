@@ -8,12 +8,12 @@ import { sendPV } from "./lib/sendEmail";
 import { generateClientToken } from "./hooks/useClientToken";
 
 // Chargement différé — @react-pdf/renderer est lourd (~1.5 MB)
-async function generatePDFBlob(mission, edl, date) {
+async function generatePDFBlob(mission, edl, date, userName = "") {
   const [{ pdf }, { PVDocument }] = await Promise.all([
     import("@react-pdf/renderer"),
     import("./lib/PVDocument"),
   ]);
-  return pdf(<PVDocument mission={mission} edl={edl} date={date} />).toBlob();
+  return pdf(<PVDocument mission={mission} edl={edl} date={date} userName={userName} />).toBlob();
 }
 
 /* ═══════════════════════════════════════════════════
@@ -468,7 +468,7 @@ function SignatureCanvas({ onSigned }) {
     last.current=p;setHas(true);onSigned(ref.current.toDataURL("image/png"));
   }
   function end(){drawing.current=false;}
-  function clear(){ref.current.getContext("2d").clearRect(0,0,600,180);setHas(false);onSigned(false);}
+  function clear(){ref.current.getContext("2d").clearRect(0,0,600,160);setHas(false);onSigned(false);}
   return (
     <div>
       <div style={{ border:`1px solid ${has ? C.borderMid : C.border}`, borderRadius:8, overflow:"hidden", background:C.bgInput, position:"relative", transition:"border-color .2s" }}>
@@ -505,7 +505,7 @@ function Step1({d,od,m}){
           <StatutBadge statut="planifiée" small/>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-          {[["📅 Date","Mar 19 Août"],["⏰ Enlèvement",m.heure],["🏁 Livraison",m.heureLiv],["💰 Rémunération",m.remuneration]].map(([l,v])=>(
+          {[["📅 Date",m.date],["⏰ Enlèvement",m.heure],["🏁 Livraison",m.heureLiv],["💰 Rémunération",m.remuneration]].map(([l,v])=>(
             <div key={l}><div style={{ fontSize:11, color:C.textMuted, marginBottom:2 }}>{l}</div><div style={{ fontSize:14, fontWeight:600, color:C.textPrimary }}>{v}</div></div>
           ))}
         </div>
@@ -656,11 +656,14 @@ function Step5({d,od,m}){
   return (
     <div className="fade">
       <Card style={{ marginBottom:12, background:C.bgDeep }}>
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12 }}>
-          <div style={{ fontSize:11, color:C.textMuted }}>Distance estimée</div>
-          <div style={{ fontSize:18, fontWeight:700, color:C.textPrimary }}>~280 km</div>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+          <div style={{ fontSize:11, color:C.textMuted }}>Trajet</div>
+          <div style={{ fontSize:13, fontWeight:600, color:C.textPrimary }}>{m.titre}</div>
         </div>
-        <div style={{ fontSize:11, color:C.textMuted }}>Durée estimée : 3h15</div>
+        <div style={{ display:"flex", justifyContent:"space-between" }}>
+          <div style={{ fontSize:11, color:C.textMuted }}>Client</div>
+          <div style={{ fontSize:13, fontWeight:600, color:C.textPrimary }}>{m.client}</div>
+        </div>
       </Card>
       <Card style={{ marginBottom:12 }}>
         <SectionTitle>Adresse de livraison</SectionTitle>
@@ -727,7 +730,7 @@ function Step7({d,od}){
   );
 }
 
-function Step8({d,od,m}){
+function Step8({d,od,m,userName}){
   return (
     <div className="fade">
       <Card style={{ marginBottom:12, background:C.bgDeep }}>
@@ -738,7 +741,7 @@ function Step8({d,od,m}){
         <SectionTitle>Signature du convoyeur</SectionTitle>
         <SignatureCanvas onSigned={s=>od({...d,signed:s})}/>
         <div style={{ marginTop:12, background:C.bgDeep, borderRadius:7, padding:"10px 12px" }}>
-          <div style={{ fontSize:13, fontWeight:600, color:C.textPrimary }}>MARCKATTY REGULAT</div>
+          <div style={{ fontSize:13, fontWeight:600, color:C.textPrimary }}>{userName || "—"}</div>
           <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>{new Date().toLocaleDateString("fr-FR")}</div>
         </div>
       </Card>
@@ -746,7 +749,7 @@ function Step8({d,od,m}){
   );
 }
 
-function Step9({d,m,onFin}){
+function Step9({d,m,onFin,userName}){
   const rows=[["Référence",m.ref],["Trajet",m.titre],["Véhicule",`${m.marque} ${m.modele}`],["Immatriculation",m.immat],["Km enlèvement",`${d.enl.km} km`],["Km livraison",`${d.liv.km} km`],["Distance",`${(parseInt(d.liv.km)||0)-(parseInt(d.enl.km)||0)} km`],["Carburant enl.",d.enl.carburant],["Carburant liv.",d.liv.carburant],["Clés",d.enl.cles],["Intérieur",`${d.enl.int} → ${d.liv.int}`],["Extérieur",`${d.enl.ext} → ${d.liv.ext}`],["Défauts",d.enl.defauts?.length||"Aucun"],["Photos enl.",`${d.pEnl.length} photos`],["Photos liv.",`${d.pLiv.length} photos`]];
   return (
     <div className="fade">
@@ -777,7 +780,7 @@ function Step9({d,m,onFin}){
           <span style={{ fontSize:20 }}>✓</span>
           <div>
             <div style={{ fontSize:14, fontWeight:600, color:C.green }}>Signature apposée</div>
-            <div style={{ fontSize:12, color:C.textMuted, marginTop:1 }}>MARCKATTY REGULAT · {new Date().toLocaleDateString("fr-FR")}</div>
+            <div style={{ fontSize:12, color:C.textMuted, marginTop:1 }}>{userName || "—"} · {new Date().toLocaleDateString("fr-FR")}</div>
           </div>
         </div>
       </Card>
@@ -834,7 +837,7 @@ function ClientLinkButton({ mission, edl, userId }) {
 }
 
 /* ═══════ MOBILE APP ═══════ */
-function MobileApp({ showPrice = false, missions = [], userId }) {
+function MobileApp({ showPrice = false, missions = [], userId, userName = "" }) {
   const [tab,setTab]=useState("missions");
   const [selM,setSelM]=useState(null);
   const [inEDL,setInEDL]=useState(false);
@@ -855,7 +858,7 @@ function MobileApp({ showPrice = false, missions = [], userId }) {
     setPdfLoading(true); setActionErr(null);
     try {
       const date=new Date().toLocaleDateString("fr-FR");
-      const blob=await generatePDFBlob(selM,data,date);
+      const blob=await generatePDFBlob(selM,data,date,userName);
       const url=URL.createObjectURL(blob);
       const a=document.createElement("a");
       a.href=url; a.download=`PV_${selM?.ref}_${date.replace(/\//g,"-")}.pdf`;
@@ -868,7 +871,7 @@ function MobileApp({ showPrice = false, missions = [], userId }) {
     setEmailLoading(true); setActionErr(null);
     try {
       const date=new Date().toLocaleDateString("fr-FR");
-      const blob=await generatePDFBlob(selM,data,date);
+      const blob=await generatePDFBlob(selM,data,date,userName);
       await sendPV({ to:selM?.email, missionRef:selM?.ref, missionTitre:selM?.titre, date, pdfBlob:blob });
       setEmailSent(true);
     } catch(e){ setActionErr("Erreur envoi : "+e.message); }
@@ -946,7 +949,7 @@ function MobileApp({ showPrice = false, missions = [], userId }) {
               {errors.length>1 && <ul style={{ paddingLeft:16 }}>{errors.map((e,i)=><li key={i} style={{ fontSize:12, color:C.accent, marginTop:3 }}>{e}</li>)}</ul>}
             </div>
           )}
-          <SC d={data} od={setData} m={selM} userId={userId} onFin={()=>setFinished(true)}/>
+          <SC d={data} od={setData} m={selM} userId={userId} userName={userName} onFin={()=>setFinished(true)}/>
         </div>
 
         {/* CTA */}
@@ -1044,7 +1047,7 @@ function MobileApp({ showPrice = false, missions = [], userId }) {
             <Card style={{ marginBottom:14, display:"flex", alignItems:"center", gap:14 }}>
               <div style={{ width:54, height:54, borderRadius:27, background:C.bgHover, border:`1px solid ${C.borderMid}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:26, flexShrink:0 }}>👤</div>
               <div style={{ flex:1 }}>
-                <div style={{ fontFamily:fc, fontWeight:700, fontSize:15, color:C.textPrimary, marginBottom:8 }}>MARCKATTY REGULAT</div>
+                <div style={{ fontFamily:fc, fontWeight:700, fontSize:15, color:C.textPrimary, marginBottom:8 }}>{userName.toUpperCase() || "CONVOYEUR"}</div>
                 <div style={{ display:"flex", gap:8 }}>
                   <button style={{ flex:1, background:C.greenBg, border:`1px solid ${C.greenBorder}`, color:C.green, borderRadius:6, padding:"7px 0", fontSize:12, fontWeight:600, cursor:"pointer" }}>✓ Dispo</button>
                   <button style={{ flex:1, background:C.bgHover, border:`1px solid ${C.border}`, color:C.textMuted, borderRadius:6, padding:"7px 0", fontSize:12, fontWeight:500, cursor:"pointer" }}>✕ Indispo</button>
@@ -1083,11 +1086,12 @@ function MobileApp({ showPrice = false, missions = [], userId }) {
 }
 
 /* ═══════ DESKTOP ═══════ */
-function DesktopApp({ user, showPrice = false, missions = [] }) {
+function DesktopApp({ userName = "", showPrice = false, missions = [], userId, refetch }) {
   const [page,setPage]=useState("dashboard");
+  const [showNew,setShowNew]=useState(false);
   const navItems=[{id:"dashboard",icon:"📊",l:"Tableau de bord"},{id:"missions",icon:"🚗",l:"Missions"},{id:"clients",icon:"👥",l:"Clients"},{id:"rapports",icon:"📄",l:"Rapports"}];
   const bars=[{l:"Lun",v:3},{l:"Mar",v:5},{l:"Mer",v:2},{l:"Jeu",v:7},{l:"Ven",v:4},{l:"Sam",v:1},{l:"Dim",v:0}];
-  return(
+  return(<>
     <div style={{ display:"flex", minHeight:"100vh", background:C.bg, fontFamily:fb }}>
       {/* Sidebar */}
       <div style={{ width:220, background:C.bgDeep, borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column", padding:"0 0 20px", flexShrink:0, position:"sticky", top:0, height:"100vh" }}>
@@ -1109,7 +1113,7 @@ function DesktopApp({ user, showPrice = false, missions = [] }) {
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <div style={{ width:32, height:32, borderRadius:6, background:C.accentMist, border:`1px solid ${C.accentBorder}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>👤</div>
             <div>
-              <div style={{ fontSize:12, fontWeight:700, color:C.textPrimary }}>{user.name}</div>
+              <div style={{ fontSize:12, fontWeight:700, color:C.textPrimary }}>{userName}</div>
               <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:2 }}><div style={{ width:5, height:5, borderRadius:3, background:C.green }}/><span style={{ fontSize:11, color:C.green }}>Disponible</span></div>
             </div>
           </div>
@@ -1135,7 +1139,7 @@ function DesktopApp({ user, showPrice = false, missions = [] }) {
               Semaine du 12 au 19 Août 2025 · {missions.length} missions
             </div>
           </div>
-          <BtnPrimary style={{ padding:"10px 18px", fontSize:13 }}>+ Nouvelle mission</BtnPrimary>
+          <BtnPrimary onClick={()=>setShowNew(true)} style={{ padding:"10px 18px", fontSize:13 }}>+ Nouvelle mission</BtnPrimary>
         </div>
 
         {page==="dashboard" && (
@@ -1240,20 +1244,127 @@ function DesktopApp({ user, showPrice = false, missions = [] }) {
         )}
       </div>
     </div>
+    {showNew && <NewMissionModal userId={userId} onClose={()=>setShowNew(false)} onSaved={()=>{setShowNew(false);refetch&&refetch();}}/>}
+  </>);
+}
+
+/* ─── Modal nouvelle mission ─── */
+const EMPTY_MISSION = { titre:"", client:"", marque:"", modele:"", immat:"", vin:"", date:"", heure:"", heureLiv:"", adresseEnl:"", adresseLiv:"", email:"", remuneration:"", statut:"planifiée" };
+
+function NewMissionModal({ userId, onClose, onSaved }) {
+  const [form, setForm] = useState(EMPTY_MISSION);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+
+  function set(k,v){ setForm(f=>({...f,[k]:v})); }
+
+  async function handleSubmit(e){
+    e.preventDefault(); setErr(null);
+    if (!userId) { setErr("Session expirée — rechargez la page."); return; }
+    setSaving(true);
+    const ref = "MISS" + Date.now().toString().slice(-6);
+    const { error } = await supabase.from("missions").insert({
+      ...form,
+      ref,
+      vehicule: `${form.marque} ${form.modele}`.trim(),
+      user_id: userId,
+      kmEnl: "—", kmLiv: "—",
+    });
+    setSaving(false);
+    if (error) { setErr(error.message); }
+    else { onSaved(); }
+  }
+
+  const inp = (k, placeholder, opts={}) => (
+    <input value={form[k]} onChange={e=>set(k,e.target.value)} placeholder={placeholder} required={opts.required}
+      style={{ width:"100%", background: form[k] ? C.bgHover : C.bgInput, border:`1px solid ${form[k]?C.borderMid:C.border}`, borderRadius:7, padding:"9px 12px", fontSize:13, color:C.textPrimary, fontFamily:fb, outline:"none", transition:"all .15s", boxSizing:"border-box" }} />
+  );
+
+  const label = (txt, required) => (
+    <div style={{ fontSize:11, fontWeight:600, color:C.textSecondary, marginBottom:5 }}>{txt}{required&&<span style={{color:C.accent}}> *</span>}</div>
+  );
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:9999, display:"flex", alignItems:"flex-start", justifyContent:"flex-end" }} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style={{ width:460, height:"100vh", background:C.bgDeep, borderLeft:`1px solid ${C.border}`, overflowY:"auto", display:"flex", flexDirection:"column" }}>
+        {/* Header */}
+        <div style={{ padding:"20px 24px 16px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
+          <div>
+            <div style={{ fontSize:16, fontWeight:700, color:C.textPrimary }}>Nouvelle mission</div>
+            <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>Les champs * sont obligatoires</div>
+          </div>
+          <button onClick={onClose} style={{ background:C.bgHover, border:`1px solid ${C.border}`, borderRadius:8, width:32, height:32, cursor:"pointer", fontSize:16, color:C.textSecondary, display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} style={{ padding:"20px 24px 24px", display:"flex", flexDirection:"column", gap:14, flex:1 }}>
+          <div>
+            {label("Trajet (ex : PARIS / LYON)", true)}
+            {inp("titre","VILLE A / VILLE B",{required:true})}
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <div>{label("Client",true)}{inp("client","Nom du client",{required:true})}</div>
+            <div>{label("Email client")}{inp("email","contact@client.fr")}</div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <div>{label("Marque",true)}{inp("marque","Peugeot",{required:true})}</div>
+            <div>{label("Modèle",true)}{inp("modele","EXPERT M",{required:true})}</div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <div>{label("Immatriculation",true)}{inp("immat","AB-123-CD",{required:true})}</div>
+            <div>{label("VIN")}{inp("vin","VIN du véhicule")}</div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+            <div>{label("Date",true)}{inp("date","Lun 12 Mai",{required:true})}</div>
+            <div>{label("Départ",true)}{inp("heure","08:00",{required:true})}</div>
+            <div>{label("Livraison",true)}{inp("heureLiv","17:00",{required:true})}</div>
+          </div>
+          <div>
+            {label("Adresse enlèvement",true)}
+            {inp("adresseEnl","Concession, adresse complète",{required:true})}
+          </div>
+          <div>
+            {label("Adresse livraison",true)}
+            {inp("adresseLiv","Destination, adresse complète",{required:true})}
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <div>
+              {label("Statut")}
+              <select value={form.statut} onChange={e=>set("statut",e.target.value)}
+                style={{ width:"100%", background:C.bgInput, border:`1px solid ${C.border}`, borderRadius:7, padding:"9px 12px", fontSize:13, color:C.textPrimary, fontFamily:fb, outline:"none", appearance:"none" }}>
+                <option value="planifiée">Planifiée</option>
+                <option value="en cours">En cours</option>
+                <option value="terminée">Terminée</option>
+              </select>
+            </div>
+            <div>{label("Rémunération")}{inp("remuneration","88,06 €")}</div>
+          </div>
+
+          {err && <div style={{ background:"rgba(232,85,85,0.1)", border:"1px solid rgba(232,85,85,0.3)", borderRadius:7, padding:"10px 12px", fontSize:12, color:"#E85555" }}>{err}</div>}
+
+          <div style={{ display:"flex", gap:10, marginTop:"auto", paddingTop:8 }}>
+            <BtnGhost onClick={onClose} style={{ flex:1 }}>Annuler</BtnGhost>
+            <BtnPrimary disabled={saving} style={{ flex:2, padding:"12px" }}>
+              {saving ? "Enregistrement…" : "Créer la mission"}
+            </BtnPrimary>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 
 /* ═══════ ROOT ═══════ */
-const DEMO_USER = { name:"Marckatty Regulat" };
 export default function AppLegacy({ session }) {
   const platform = usePlatform();
-  const [user]       = useState(DEMO_USER);
+  const userEmail = session?.user?.email ?? "";
+  const userName  = session?.user?.user_metadata?.full_name ?? userEmail;
   const [forceView, setForceView] = useState(null);
   const [dark, setDark]           = useState(true);
   const [showPrice, setShowPrice] = useState(false); // 💰 masqué par défaut
 
   const userId = session?.user?.id;
-  const { missions } = useMissions(userId);
+  const { missions, refetch } = useMissions(userId);
 
   C = makeTheme(dark);
 
@@ -1317,11 +1428,11 @@ export default function AppLegacy({ session }) {
       </div>
 
       <div style={{ paddingTop:30 }}>
-        {view==="desktop" ? <DesktopApp user={user} showPrice={showPrice} missions={missions}/> : (
+        {view==="desktop" ? <DesktopApp userName={userName} showPrice={showPrice} missions={missions} userId={userId} refetch={refetch}/> : (
           <div style={{ display:"flex", justifyContent:"center", background: dark ? "#050506" : "#D8D4CC", minHeight:"calc(100vh - 30px)", alignItems:"flex-start", paddingTop:20, transition:"background .3s" }}>
             <div style={{ width:390, background:C.bg, borderRadius:40, overflow:"hidden", boxShadow: dark ? "0 28px 80px rgba(0,0,0,0.9)" : "0 28px 60px rgba(0,0,0,0.25)", border:"8px solid #111", position:"relative", minHeight:700, transition:"background .3s" }}>
               <div style={{ position:"absolute", top:0, left:"50%", transform:"translateX(-50%)", width:110, height:26, background:"#111", borderRadius:"0 0 16px 16px", zIndex:50 }}/>
-              <MobileApp showPrice={showPrice} missions={missions} userId={userId}/>
+              <MobileApp showPrice={showPrice} missions={missions} userId={userId} userName={userName}/>
             </div>
           </div>
         )}
